@@ -13,7 +13,7 @@ class Game{
         this.canvas.height = height;
 
         this.context = this.canvas.getContext('2d');
-
+        this.state = "playing";
 
         let miniMe = this;
         this.internalFunctions['render'] = function(c){ c.clearRect(0,0,miniMe.canvas.width,miniMe.canvas.height) };
@@ -41,7 +41,11 @@ class Game{
 
         this.instance = "single";
 
+        this.pauseTimer = undefined;
+
         this.entities = [];
+
+        this.spamBufferActive = false;
 
         this.performance = {
             'requiredFPS':1,
@@ -76,7 +80,7 @@ class Game{
         this.canvas.addEventListener("mousemove",function(event){
             me.mousePos['x'] = event.layerX;
             me.mousePos['y'] = event.layerY;
-            me.changesMade = true;
+            // me.changesMade = true;
         });
 
         this.debug = console;
@@ -86,16 +90,28 @@ class Game{
     }
 
     set msPerFrames(v){
-        this.performance.requiredFPS = v;
+        this.performance.requiredFPS = (v == -1 ? 0 : v);
         if (this.performance.monitor == true){
             this.performance['currentFPS'] = this.fps;
-            this.performance['requiredMillisecondsPerFrame'] = v;
+            this.performance['requiredMillisecondsPerFrame'] = (v == -1 ? 0 : v);
         }
         if (this.performance.smartBalance == false) return;
 
-        if (this.fps != 1000/(v == 0 ? 1 : v) ){
-            console.log(this.fps);
-            this.shiftFPS( 1000/(v == 0 ? 1 : v) );
+        if (this.fps != (v == 0 ? 1 : (v == -1 ? 60 : v) ) ){
+            let repFPS = (v == 0 ? 1 : (v == -1 ? 60 : v) );
+            if (v == 0){
+                repFPS = 500;
+            }
+            else if (v == -1){
+                repFPS = 60;
+            }
+            else{
+                repFPS = 1000/v
+            }
+            this.debug.info('RFPS: '+(repFPS));
+            this.debug.info('MSPF: '+(1000/repFPS));
+
+            if (this.state == "playing") this.shiftFPS( repFPS );
         }
     }
 
@@ -138,8 +154,14 @@ class Game{
     }
 
     start(fps=this.fps){
+        if (this.spamBufferActive == true) return;
         this.fps = fps;
         this.log = [];
+
+        if (this.state == "paused") {
+            clearInterval(this.pauseTimer);
+            this.state = "playing";
+        }
 
         if ( this.internalFunctions['update'] == this.internalFunctions['render'] == undefined ) {
             this.log.push('ERROR: Render or Update not defined!');
@@ -150,17 +172,25 @@ class Game{
 
         let me = this;
 
+
+        me.spamBufferActive = true;
+        setTimeout(function(){ me.spamBufferActive=false },500);
+
+        me.state = "playing";
+
         this.renderTimer = setInterval(function(){
             let startTime = Date.now();
+            let didRender = false;
             me.process();
-            if (me.changesDrawn == false) {
+            if (me.changesDrawn == false && me.state == "playing") {
+                didRender = true;
                 me.internalFunctions['render'](me.context);
                 me.dirtyAllEntities();
                 me.renderAllEntities();
                 me.changesDrawn = true;
             }
             let endTime = Date.now();
-            me.msPerFrames = endTime-startTime;
+            me.msPerFrames = ( didRender == true ? (endTime-startTime) : -1);
         },1000/fps)
 
     }
@@ -182,24 +212,21 @@ class Game{
         return res;
     }
     stop(){
+        this.state = "stopped";
         clearInterval(this.renderTimer);
         this.renderTimer = undefined;
     }
 
-    pause(ms){
-        this.stop();
-        me = this;
-        if (ms != undefined){
-            setTimeout(function(){
-                me.start(me.fps);
-            },ms)
-        }
+    pause(){
+        if (this.spamBufferActive == true) return;
+        this.state = "paused";
+        let me = this;
+        me.spamBufferActive = true;
+        setTimeout(function(){ me.spamBufferActive=false },500);
     }
 
     shiftFPS(fps){
-        let fpsBefore = this.fps;
         this.start(fps);
-        this.debug.info('[FPS SHIFT]: FPS was changed from ' + fpsBefore +' to '+fps);
     }
 
     dirty(){
@@ -230,7 +257,6 @@ class Game{
             this.changesMade = true;
             this.changesDrawn=false;
         }
-        if (this.changesMade == false || this.engineBusy == true) return;
         let me = this;
         me.internalFunctions['update'](
             {
@@ -262,6 +288,8 @@ class Game{
             }
         );
 
+
+        if (this.changesMade == false || this.engineBusy == true) return;
 
         let kA = [];
 
@@ -388,9 +416,9 @@ class GameEntity{
         this.isDirty = true;
     }
     setPositions(x,y){
+        if (this.x != x || this.y != y) this.isDirty = true;
         this.x = x;
         this.y = y;
-        this.isDirty = true;
     }
 
     get x(){
@@ -419,6 +447,7 @@ class GameEntity{
             this.gravityMove();
             skipParentDirty = true;
         }
+        if (this.isDirty) skipParentDirty = true;
         if (this.isDirty == false && skipParentDirty == false) return;
         // if this element hasnt been updated, dont render
         if (skipParentDirty){
@@ -455,7 +484,7 @@ class GameEntity{
         this.isDirty = !this.hasHitBottom;
     }
     hitBottom(){
-        let rockbottom = (this.parent.canvas.height - this.height) + this.parent.canvas.offsetTop;
+        let rockbottom = (this.parent.canvas.height - (this.height/2)) + this.parent.canvas.offsetTop;
         if (this.y > rockbottom) {
             this.y = rockbottom;
             this.gravitySpeed = 0;

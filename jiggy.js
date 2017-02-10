@@ -91,28 +91,33 @@ class Game{
 
     set msPerFrames(v){
         this.performance.requiredFPS = (v == -1 ? 0 : v);
+        let repFPS = (v == 0 ? 1 : (v == -1 ? 60 : v) );
+        if (v == 0){
+            repFPS = 60;
+        }
+        else if (v == -1){
+            repFPS = 0;
+        }
+        else{
+            repFPS = 1000/v
+        }
+
+        if (this.performance.smartBalance == true) {
+            if (this.fps != repFPS){
+
+                this.debug.info('RFPS: '+(repFPS == 0 ? 25 : repFPS));
+                this.debug.info('MSPF: '+(1000/(repFPS == 0 ? 25 : repFPS)));
+
+                if (this.state == "playing") this.shiftFPS( (repFPS == 0 ? 25 : repFPS) );
+            }
+        }
+
         if (this.performance.monitor == true){
-            this.performance['currentFPS'] = this.fps;
             this.performance['requiredMillisecondsPerFrame'] = (v == -1 ? 0 : v);
+            this.performance['FPS'] = (repFPS == 0 ? 25 : repFPS);
+            this.performance['MSPF'] = (1000/ (repFPS == 0 ? 25 : repFPS) );
         }
-        if (this.performance.smartBalance == false) return;
 
-        if (this.fps != (v == 0 ? 1 : (v == -1 ? 60 : v) ) ){
-            let repFPS = (v == 0 ? 1 : (v == -1 ? 60 : v) );
-            if (v == 0){
-                repFPS = 500;
-            }
-            else if (v == -1){
-                repFPS = 60;
-            }
-            else{
-                repFPS = 1000/v
-            }
-            this.debug.info('RFPS: '+(repFPS));
-            this.debug.info('MSPF: '+(1000/repFPS));
-
-            if (this.state == "playing") this.shiftFPS( repFPS );
-        }
     }
 
     setFlags(flags){
@@ -411,9 +416,9 @@ class GameEntity{
 
     }
     setDimensions(width,height){
+        if (this.width != width || this.height != height) this.isDirty = true;
         this.width = width;
         this.height = height;
-        this.isDirty = true;
     }
     setPositions(x,y){
         if (this.x != x || this.y != y) this.isDirty = true;

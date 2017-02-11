@@ -8,64 +8,115 @@ const ball = new GameEntity();
 const AI = new GameEntity();
 
 game.onUpdate(function(logic,mousePos,gameKeys,activeKeys){
-    if ( player.y != mousePos.y ){
-        player.y = mousePos.y;
+    if ( player.y != mousePos.realY ){
+        player.y = mousePos.realY;
         player.x = 20;
         player.setDimensions(10,80);
+        if (mousePos.realY < (player.height/2)) player.y = (player.height/2);
+        if (mousePos.realY > game.height - (player.height/2)) player.y =  game.height - (player.height/2);
         player.dirty();
     }
 
-    if (ball.x < game.width){
-        ball.x += 1;
-        ball.dirty();
+    if (ball.variables['moving'] == false){
+        ball.variables['moving'] = true;
+    }
+    else{
+        ball.x +=  ball.variables.vx;
+        ball.y += ball.variables.vy;
     }
 
-    if ( AI.y < ball.y ){
-        AI.y += 1;
-        AI.x = game.width - ( AI.width - 20);
-        AI.dirty();
+    if (ball.atBorder()){
+
+        if (ball.whichBorder() == 'LEFT' || ball.whichBorder() == 'RIGHT'){
+            ball.variables.vx *= -1;
+            game.restart();
+        }
+        else{
+            ball.variables.vy *= -1;
+        }
+
     }
-    else if(AI.y > ball.y){
-        AI.y -= 1;
-        AI.x = game.width - ( 30);
-        AI.dirty();
+    else if (ball.isOffscreen()){
+        game.restart();
     }
+    else if (ball.hits(AI)){
+        ball.variables.vx *= -1;
+    }
+    else if (ball.hits(player)){
+        ball.variables.vx *= -1;
+    }
+
+    if (ball.x >= game.width/2){
+        if ( AI.y < ball.y ){
+            AI.y += 1;
+            AI.x = game.width - ( AI.width * 2 );
+            AI.dirty();
+        }
+        else if(AI.y > ball.y){
+            AI.y -= 1;
+            AI.x = game.width - ( AI.width  * 2 );
+            AI.dirty();
+        }
+    }
+    AI.dirty();
 });
 
 game.onRender(function(canvasContext){
-    canvasContext.fillStyle = '#6500AA';
+    canvasContext.fillStyle = 'dimgray';
     canvasContext.fillRect(0,0,game.width,game.height);
-    console.error('CANVAS RENDERED');
 });
 
-player.onRender(function(gameboard , pos , size){
-    gameboard.context.fillStyle = '#FF0000';
-    gameboard.context.fillRect(pos.x,pos.y,size.width,size.height);
+player.onRender(function(graphics , pos , size){
+    graphics.fillStyle = 'rgba(255,0,0,.5)';
+    graphics.fillRect(pos.x,pos.y,size.width,size.height);
+
+    graphics.beginPath();
+    graphics.strokeStyle = 'white';
+    graphics.lineWidth = 1;
+    graphics.rect(pos.x,pos.y,size.width,size.height);
+    graphics.stroke();
 });
 
-ball.onRender(function(gameboard , pos , size){
-    gameboard.context.fillStyle = 'orange';
-    gameboard.context.fillRect(pos.x,pos.y,30,30);
+ball.onRender(function(graphics , pos , size){
+    graphics.fillStyle = 'rgba(255,255,255,1)';
+    graphics.fillRect(pos.x,pos.y,size.width,size.height);
+
+    graphics.beginPath();
+    graphics.strokeStyle = 'white';
+    graphics.lineWidth = 1;
+    graphics.rect(pos.x,pos.y,size.width,size.height);
+    graphics.stroke();
 });
 
-AI.onRender(function(gameboard , pos , size){
-    gameboard.context.fillStyle = '#00FF00';
-    gameboard.context.fillRect(pos.x,pos.y,size.width,size.height);
+AI.onRender(function(graphics , pos , size){
+    graphics.fillStyle = 'rgba(0,255,0,.5)';
+    graphics.fillRect(pos.x,pos.y,size.width,size.height);
+
+    graphics.beginPath();
+    graphics.strokeStyle = 'white';
+    graphics.lineWidth = 1;
+    graphics.rect(pos.x,pos.y,size.width,size.height);
+    graphics.stroke();
 });
 
-AI.setPositions(game.width - 30,game.height - 90);
-AI.setDimensions(10,80);
+game.registerKeyCombination(['SPACEBAR'],function(){
+    game.togglePause();
+});
 
-// ball.ignoreGravity=true;
+game.setup(function(){
+    ball.setDimensions(5,5);
+    ball.setPositions(game.width/2,game.height/2);
+});
 
-game.settings.smartFPS = true;
+ball.variables['vx'] = 1.2;
+ball.variables['vy'] = 1.2;
+ball.variables['moving'] = false;
+
 game.settings.monitor = true;
 
 game.setFlags(['NO_ALERT']);
 
-game.play(60);
+AI.setPositions(game.width - 30,game.height - 90);
+AI.setDimensions(10,80);
 
-setInterval(function(){
-    let r = document.getElementById('fps');
-    r.innerHTML = game.FPS+" Paints Per Second"
-},1000);
+game.play(30);
